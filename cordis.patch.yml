@@ -1,0 +1,6 @@
+# dsh-upstream-model-audit 贡献的组合层。
+# 一行客户端-plane：浏览器半由 package.json 的 dsh.client 声明发现并以 lib/client.js
+# 提供；node 半注册会话投影。
+- insert:
+    - id: ui-upstream-model-audit
+      name: dsh-upstream-model-audit

@@ -1,0 +1,72 @@
+{
+  "name": "dsh-upstream-model-audit",
+  "version": "0.1.0",
+  "description": "dsh web plugin: shows the model name the upstream actually reported for each assistant step, taken verbatim from the durable replay metadata",
+  "type": "module",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/client.js.map",
+    "cordis.patch.yml",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test",
+    "prepublishOnly": "pnpm run typecheck && pnpm run build && pnpm run test"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.2",
+    "@types/node": "^26.4.1",
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0",
+    "@types/react-dom": "~18.3.0",
+    "react-dom": "^18.2.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/QuanhuZeYu/dsh-upstream-model-audit.git"
+  },
+  "author": "QuanhuZeYu",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "cordis",
+    "cordis-plugin",
+    "upstream",
+    "model",
+    "audit",
+    "ui"
+  ]
+}
