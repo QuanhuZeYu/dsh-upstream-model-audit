@@ -18,6 +18,7 @@ const STYLES = [
   '.' + CLS + '-label { color: var(--dsw-alias-label-caption); }',
   '.' + CLS + '-to { color: var(--dsw-alias-label-primary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }',
   '.' + CLS + '-meta { color: var(--dsw-alias-label-caption); }',
+  '.' + CLS + '-audit { flex-basis: 100%; color: var(--dsw-alias-label-caption); }',
 ].join('\n')
 
 /**

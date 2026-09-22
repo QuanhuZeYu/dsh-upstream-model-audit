@@ -69,3 +69,61 @@ test('markOf 的三态口径', () => {
   assert.equal(markOf('a', 'a/b'), 'different')
   assert.equal(markOf('mimo-v2.6-pro', 'xiaomi/mimo-v2.6-pro'), 'prefixed')
 })
+
+test('带 upstreamAudit 的事件把旁路事实一并带出', () => {
+  const event = {
+    type: 'assistant/message',
+    data: {
+      turn: 2,
+      step: 1,
+      message: {
+        source: {
+          kind: 'model',
+          model: 'deepseek-flash',
+          replayState: {
+            response: {
+              kind: 'pi-ai',
+              version: 2,
+              model: 'deepseek-flash',
+              responseModel: 'deepseek/deepseek-v4.1-flash',
+              upstreamAudit: { sentModel: 'deepseek-flash', serviceTier: 'priority', transport: 'sse', variants: ['a', 'b'] },
+            },
+          },
+        },
+      },
+    },
+  }
+  const audit = auditOf(event)
+  assert.equal(audit.mark, 'different')
+  assert.equal(audit.sentModel, 'deepseek-flash')
+  assert.equal(audit.serviceTier, 'priority')
+  assert.deepEqual(audit.variants, ['a', 'b'])
+})
+
+test('没有 audit 时相关字段不出现；单个 variants 不带出', () => {
+  const base = (upstreamAudit) => ({
+    type: 'assistant/message',
+    data: {
+      turn: 1,
+      step: 1,
+      message: {
+        source: {
+          kind: 'model',
+          model: 'req',
+          replayState: { response: { kind: 'pi-ai', version: 2, responseModel: 'vendor/req', ...(upstreamAudit === undefined ? {} : { upstreamAudit }) } },
+        },
+      },
+    },
+  })
+  const plain = auditOf(base(undefined))
+  assert.equal(plain.sentModel, undefined)
+  assert.equal(plain.serviceTier, undefined)
+  assert.equal(plain.variants, undefined)
+  const single = auditOf(base({ variants: ['only'] }))
+  assert.equal(single.variants, undefined)
+  const junk = auditOf(base({ sentModel: 42, serviceTier: '', variants: 'nope' }))
+  assert.equal(junk.sentModel, undefined)
+  assert.equal(junk.serviceTier, undefined)
+  assert.equal(junk.variants, undefined)
+})
+

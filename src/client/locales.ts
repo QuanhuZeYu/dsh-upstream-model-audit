@@ -10,6 +10,9 @@ export const zh = {
   'row.aria': '第 {turn} 轮第 {step} 步：请求 {requested}，上游返回 {reported}',
   'mark.prefixed': '仅厂商前缀不同',
   'mark.different': '模型名不同',
+  'audit.sent': '实际发出 {model}',
+  'audit.tier': '档位 {tier}',
+  'audit.variants': '上游先后来过 {list}',
 } as const
 
 /** 英文字典，与中文键集合一一对应。 */
@@ -19,6 +22,9 @@ export const en: Record<UpstreamModelAuditKey, string> = {
   'row.aria': 'Turn {turn} step {step}: requested {requested}, upstream returned {reported}',
   'mark.prefixed': 'vendor prefix only',
   'mark.different': 'different model name',
+  'audit.sent': 'sent {model}',
+  'audit.tier': 'tier {tier}',
+  'audit.variants': 'upstream declared {list}',
 }
 
 /** 本命名空间的键类型。 */
