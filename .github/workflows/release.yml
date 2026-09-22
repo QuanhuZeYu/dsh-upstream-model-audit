@@ -1,7 +1,12 @@
 # 发布流水线：打 tag（v*）或手动触发时校验并发布到 npm。
 #
-# 需要仓库 secret `NPM_TOKEN`（npm Automation token，Bypass 2FA）。没配这个 secret 时，
-# 校验步骤照跑、发布步骤自动跳过，所以打 tag 不会产生失败的红叉。
+# 两个校验 job：
+#   - verify：装依赖、构建、跑 38 条规格（不依赖任何外部仓库）；
+#   - typecheck：clone 官方 DeepSeek Harness 并只构建本插件 import 的那几个包的类型产物
+#     （lib/types 不入库，必须构建），再用插件自己的 tsconfig 类型检查。
+#     上游 master 漂移不该阻塞发布，所以这一步标记为允许失败：红了要修，但不拦发布。
+#
+# 需要仓库 secret `NPM_TOKEN`（npm Automation token，Bypass 2FA）。没配时发布步骤自动跳过。
 name: release
 on:
   push:
@@ -11,7 +16,54 @@ permissions:
   contents: read
   id-token: write
 jobs:
-  npm:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dev dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Specs
+        run: npm test
+
+  typecheck:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone DeepSeek Harness (type source)
+        run: git clone --depth 1 https://github.com/deepseek-ai/deepseek-harness.git /home/runner/deepseek-harness
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Harness dependencies
+        working-directory: /home/runner/deepseek-harness
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build the type declarations this plugin imports
+        working-directory: /home/runner/deepseek-harness
+        run: >-
+          pnpm exec tsc -b
+          packages/core/session
+          packages/client/store
+          packages/client/locale
+          packages/client/ui-slots
+          packages/client/ui-renderer
+          packages/client/ui-conversation
+          packages/client/ui-chat
+      - name: Typecheck plugin against Harness types
+        run: |
+          npm install --no-audit --no-fund
+          npx tsc -p tsconfig.json --noEmit
+
+  publish:
+    needs: [verify]
     runs-on: ubuntu-latest
     env:
       # secrets 不能出现在 step 的 if 里，先映射成普通变量再判断。
@@ -20,15 +72,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
       - name: Install dev dependencies
         run: npm install --no-audit --no-fund
-      - name: Verify (typecheck + build + specs)
-        run: |
-          npm run typecheck
-          npm run build
-          npm test
       - name: Publish to npm
         if: env.HAS_NPM_TOKEN == 'true'
         run: npm publish --provenance --access public
