@@ -46,12 +46,12 @@ jobs:
       - name: Install Harness dependencies
         working-directory: /home/runner/deepseek-harness
         run: pnpm install --frozen-lockfile --ignore-scripts
-      # 只构建"本插件用到的那几个包"不行：Harness 的 client 面包互相引用 /remote 之类的
-      # 子路径类型，必须按官方 typecheck 的顺序先把 host 面整体建出来，再建 client 面。
-      - name: Build Harness type declarations (host face)
+      # 两个坑：只构建"本插件用到的那几个包"不行，client 面的包互相引用 /remote 子路径类型；
+      # 而只用 tsc -b 建 host 面也不够，官方 typecheck 的前置是 build:lib:host（含 tsdown 那一半）。
+      - name: Build Harness host face (official command)
         working-directory: /home/runner/deepseek-harness
-        run: pnpm exec tsc -b tsconfig.host.json
-      - name: Build Harness type declarations (client face)
+        run: pnpm run build:lib:host
+      - name: Build Harness client face types (official command)
         working-directory: /home/runner/deepseek-harness
         run: pnpm exec tsc -b tsconfig.client.json
       - name: Typecheck plugin against Harness types
