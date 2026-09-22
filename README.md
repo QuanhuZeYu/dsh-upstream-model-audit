@@ -33,7 +33,7 @@ DSH 的 durable `assistant/message` 事件里本来就带着两个字段：
 
 | 字段 | 含义 |
 |---|---|
-| `message.source.model` | 实际发往 provider 的模型名 |
+| `message.source.model` | DSH 路由选定、本次请求的模型 id（pi-ai 称 request identity） |
 | `message.source.replayState.response.responseModel` | 上游响应声明的模型名（pi-ai 适配器保留） |
 
 插件在自有 Conversation Definition 的 `update` 阶段直接读它们（客户端事件窗口里是完整的
@@ -47,7 +47,16 @@ DSH 的 durable `assistant/message` 事件里本来就带着两个字段：
 
 ## 已知边界
 
-- 只覆盖走 pi-ai 适配器的 provider：DeepSeek 自研通道丢弃了响应里的 model；
+- 只覆盖走 pi-ai 适配器的 provider：DeepSeek 自研通道丢弃了响应里的 model（实测 262 次调用 0 条可见）；
+- **`openai-responses` 通道探测不到**（含 azure / codex 分支）：pi-ai 0.85.1 只在 completions 通道写
+  `responseModel`（`dist/api/openai-completions.js:374-377`），responses 通道从不写这个字段 ——
+  实测 11000 次 responses 调用 0 条可见，即使上游确实回了 model；
+- **`anthropic-messages` 通道只在"上游换了名字"时有值**（`llm-pi-ai/src/replay.ts:78-79`）：
+  声明名与请求名一致时不留记录；
+- **一致时不留痕**：pi-ai 仅在响应 model 与请求 model **不同**时才记录该字段，因此本插件无法统计
+  "一致率"，也分不清"上游没声明"与"声明了同一个名字"；
+- 只有两个名字可用（请求模型 id + 上游声明名）；网关类工具能区分"用户请求名 / 实际发往上游名 /
+  上游声明名"三个名字，DSH 侧没有第三份记录；
 - 若上游或中转把响应 model 改写成请求名，两个名字就会相同 —— 插件只对 DSH 侧可见的事实负责；
 - 原生 Trajectory 标签页不显示这些记录；
 - 节点锚点 `anchorSeq = 消息 seq + 0.01` 依赖 ui-chat 取 assistant 消息 seq 的语义，DSH 升级后需复查。
