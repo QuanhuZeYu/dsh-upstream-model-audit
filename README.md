@@ -86,6 +86,12 @@ dsh plugin --profile web add github:QuanhuZeYu/dsh-upstream-model-audit
 
 ## 开发
 
+类型检查需要 DeepSeek Harness 的**类型产物**：把官方仓库 clone 到与本仓库并列的位置
+（例如 `D:\Code\deepseek-harness`，即 `../../../deepseek-harness`），构建一次后
+`tsconfig.json` 的 `paths` 就会指向它。CI（`.github/workflows/release.yml`）里做的是同一件事：
+clone 官方仓库 → `pnpm run build:lib:host` → `tsc -b tsconfig.client.json` → 再跑下面的检查，
+实测约 3 分钟。
+
 ```sh
 pnpm run typecheck   # 类型检查
 pnpm run build       # host 半（观察点 + 补写）+ 浏览器 bundle + 纯逻辑 dev 产物

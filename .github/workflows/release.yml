@@ -2,9 +2,10 @@
 #
 # 两个校验 job：
 #   - verify：装依赖、构建、跑 38 条规格（不依赖任何外部仓库）；
-#   - typecheck：clone 官方 DeepSeek Harness 并只构建本插件 import 的那几个包的类型产物
-#     （lib/types 不入库，必须构建），再用插件自己的 tsconfig 类型检查。
-#     上游 master 漂移不该阻塞发布，所以这一步标记为允许失败：红了要修，但不拦发布。
+#   - typecheck：clone 官方 DeepSeek Harness、按官方顺序构建类型环境（build:lib:host +
+#     tsc -b tsconfig.client.json），再用插件自己的 tsconfig 类型检查。lib/types 与 /remote
+#     子路径类型都不入库，必须重建；实测约 3 分钟。
+#     publish 只依赖 verify：类型检查红是明确信号，但上游 master 漂移不该卡住已经验证过的发布。
 #
 # 需要仓库 secret `NPM_TOKEN`（npm Automation token，Bypass 2FA）。没配时发布步骤自动跳过。
 name: release
@@ -32,7 +33,6 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Clone DeepSeek Harness (type source)
