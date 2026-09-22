@@ -1,7 +1,7 @@
 {
   "name": "dsh-upstream-model-audit",
-  "version": "0.1.0",
-  "description": "dsh web plugin: shows the model name the upstream actually reported for each assistant step, taken verbatim from the durable replay metadata",
+  "version": "0.2.0",
+  "description": "dsh plugin: shows the model name the upstream actually reported for each assistant step, backfilling pi-ai replay metadata from a non-invasive fetch observer when the adapter omits it",
   "type": "module",
   "license": "MIT",
   "main": "lib/index.js",

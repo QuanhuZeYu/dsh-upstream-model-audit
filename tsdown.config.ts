@@ -54,7 +54,7 @@ export default defineConfig([
   {
     // 仅供 node --test 使用：纯逻辑模块的普通 ESM 产物（不计入 files）。
     name: ID + '/dev',
-    entry: { marks: 'src/marks.ts' },
+    entry: { marks: 'src/marks.ts', observe: 'src/observe.ts', host: 'src/host.ts' },
     outDir: 'lib/dev',
     format: ['esm'],
     platform: 'node',

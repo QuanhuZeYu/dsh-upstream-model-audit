@@ -17,7 +17,7 @@
 dsh plugin --profile web add github:QuanhuZeYu/dsh-upstream-model-audit
 ```
 
-装到 web profile 后**刷新页面**即可（纯浏览器插件，无需重启 DSH）。
+装好后**重启一次 DSH**（host 半要在 node 进程里装观察点），之后改配置/刷新页面即可。
 
 ## 显示规则
 
@@ -29,34 +29,45 @@ dsh plugin --profile web add github:QuanhuZeYu/dsh-upstream-model-audit
 
 ## 数据从哪来
 
-DSH 的 durable `assistant/message` 事件里本来就带着两个字段：
+展示用的是 durable `assistant/message` 事件里的字段：
 
 | 字段 | 含义 |
 |---|---|
-| `message.source.model` | DSH 路由选定、本次请求的模型 id（pi-ai 称 request identity） |
-| `message.source.replayState.response.responseModel` | 上游响应声明的模型名（pi-ai 适配器保留） |
+| `message.source.model` | DSH 路由选定、本次请求的模型 id |
+| `message.source.replayState.response.responseModel` | 上游响应声明的模型名 |
 
-插件在自有 Conversation Definition 的 `update` 阶段直接读它们（客户端事件窗口里是完整的
-`SessionEvent`），因此没有投影、没有额外传输、没有会话日志写入。历史会话打开后同样显示。
+但**适配器只在部分通道写第二个字段**，这是覆盖率的全部问题所在：
 
-## 它不做什么
+| 通道 | 原生是否有值 | 原因 |
+|---|---|---|
+| `openai-completions` | 仅在"响应名 ≠ 请求名"时 | pi-ai 的 `openai-completions.js` 只在名字不同时写 `responseModel` |
+| `openai-responses` / azure / codex | **从不** | pi-ai 这些分支根本不写该字段（实测 11000 次调用 0 条可见） |
+| `anthropic-messages` | 仅在"上游换了名字"时 | `llm-pi-ai/src/replay.ts` 只在 `message.model !== requestedModel` 时取值 |
+| 自研 `deepseek-messages` | 从不 | 该 envelope 里只有请求模型 |
 
-- 不新增会话事件类型、不改 DSH 源码、不需要 host 侧逻辑；
-- 不注入模型上下文：不发 notice、不加 step、不产生额外模型调用；
-- 不替换原生渲染器（不改 `assistant-step` 渲染器、不动 composer dock、不动 Trajectory）。
+### host 半的旁路补全
+
+为了在不改 DSH 源码、不改依赖的前提下补齐这些通道，插件多了一个**完全旁路**的 node 半：
+
+1. **fetch 观察点**：只在本插件建立的调用作用域内克隆响应体（`Response.clone()` 是 tee，
+   不动调用方那一支），按与 sub2api 相同的语义解析 SSE / JSON 帧里的模型声明
+   （terminal 帧优先、否则首个；名字超长截断到 200 字符；畸形帧忽略）；
+2. **`llm/stream` 中间件**（cordis waterfall）：为每次模型调用建立作用域，并在 `finish` chunk 上
+   **只在 `responseModel` 缺失时**补写观察到的名字——原生值永远优先，形状不认识的
+   replayState 一律不碰。
+
+补进去的值随后由 DSH 自己持久化进 durable 事件，**展示路径完全没变**：仍是浏览器半直接读
+`replayState.response.responseModel`，没有新增事件类型、没有投影、没有 RPC、不进入模型上下文。
+
+不变量：观察失败、超时、格式不认识、非 SSE/JSON 响应 —— 一律静默降级，绝不影响模型调用。
 
 ## 已知边界
 
-- 只覆盖走 pi-ai 适配器的 provider：DeepSeek 自研通道丢弃了响应里的 model（实测 262 次调用 0 条可见）；
-- **`openai-responses` 通道探测不到**（含 azure / codex 分支）：pi-ai 0.85.1 只在 completions 通道写
-  `responseModel`（`dist/api/openai-completions.js:374-377`），responses 通道从不写这个字段 ——
-  实测 11000 次 responses 调用 0 条可见，即使上游确实回了 model；
-- **`anthropic-messages` 通道只在"上游换了名字"时有值**（`llm-pi-ai/src/replay.ts:78-79`）：
-  声明名与请求名一致时不留记录；
-- **一致时不留痕**：pi-ai 仅在响应 model 与请求 model **不同**时才记录该字段，因此本插件无法统计
-  "一致率"，也分不清"上游没声明"与"声明了同一个名字"；
-- 只有两个名字可用（请求模型 id + 上游声明名）；网关类工具能区分"用户请求名 / 实际发往上游名 /
-  上游声明名"三个名字，DSH 侧没有第三份记录；
+- **需要重启一次 DSH**：host 半在 node 进程里装观察点，热重载不覆盖它；
+- 走 `globalThis.fetch` 的 provider 才能被观察（pi-ai 的 openai SDK、自研通道的 `fetch` 都属于）；
+  若将来适配器改成注入式 fetch，观察会静默失效——此时表现是"回到只有原生字段的覆盖率"，不影响任何调用；
+- 自研 `chat-completions` 协议没有 replayState（实测 40 次调用），没有可补的载体，仍不可见；
+- 上游确实没声明 model 的响应仍然不显示（不猜）；
 - 若上游或中转把响应 model 改写成请求名，两个名字就会相同 —— 插件只对 DSH 侧可见的事实负责；
 - 原生 Trajectory 标签页不显示这些记录；
 - 节点锚点 `anchorSeq = 消息 seq + 0.01` 依赖 ui-chat 取 assistant 消息 seq 的语义，DSH 升级后需复查。
@@ -65,19 +76,21 @@ DSH 的 durable `assistant/message` 事件里本来就带着两个字段：
 
 ```sh
 pnpm run typecheck   # 类型检查
-pnpm run build       # host 半（空 apply）+ 浏览器 bundle + 纯逻辑 dev 产物
-pnpm test            # 判定逻辑的行为规格（node --test）
+pnpm run build       # host 半（观察点 + 补写）+ 浏览器 bundle + 纯逻辑 dev 产物
+pnpm test            # 判定逻辑与 host 旁路的规格（node --test，26 条）
 ```
 
 源码布局：
 
 | 路径 | 作用 |
 |---|---|
-| `src/marks.ts` | 纯判定逻辑（提取、三态分类），零依赖、可单测 |
+| `src/marks.ts` | 客户端判定逻辑（提取、三态分类），零依赖、可单测 |
+| `src/observe.ts` | host 侧观察逻辑（SSE/JSON 帧解析、声明聚合、补写规则），零依赖、可单测 |
+| `src/host.ts` | host 半：fetch 旁路观察 + `llm/stream` 中间件补写 |
 | `src/client/step-definition.ts` | 自有 Conversation Definition：每个有差异的 step 一个节点 |
 | `src/client/UpstreamModelAudit.tsx` | 该节点的渲染器 |
 | `src/client/index.ts` | 客户端插件体：注册 Definition、渲染器、字典、样式 |
-| `src/index.ts` | node 半：一行空 apply，供 Loader 使用 |
+| `src/index.ts` | node 半入口：装载观察点 |
 
 ## 许可
 
